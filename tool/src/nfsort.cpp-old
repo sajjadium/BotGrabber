@@ -1,0 +1,58 @@
+#include <utility/netflow.h>
+
+#include <deque>
+#include <algorithm>
+
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+using namespace utility;
+using namespace std;
+
+class NFCompare {
+	public:
+		bool operator()(const char *str1, const char *str2) const {
+			return memcmp(str1, str2, Netflow::BINARY_SIZE) < 0;
+		}
+};
+
+int main(int argc, char *argv[]) {
+	FILE *netflow_file = fopen(argv[1], "r");
+	fseek(netflow_file, 0, SEEK_END);
+	int file_size = ftell(netflow_file);
+	fseek(netflow_file, 0, SEEK_SET);
+
+	time_t time_ = time(NULL);
+
+	deque<char *> netflow_list (file_size / Netflow::BINARY_SIZE, (char *)0);
+	for (int i = 0; i < netflow_list.size(); i++) {
+		char *netflow_binary = new char[Netflow::BINARY_SIZE];
+		fread(netflow_binary, 1, Netflow::BINARY_SIZE, netflow_file);
+		netflow_list[i] = netflow_binary;
+	}
+	fclose(netflow_file);
+
+	fprintf(stderr, "Loading Completed in %ld seconds.\n", time(NULL) - time_);
+
+	time_ = time(NULL);
+
+	sort(netflow_list.begin(), netflow_list.end(), NFCompare());
+
+	fprintf(stderr, "Sorting Completed in %ld seconds.\n", time(NULL) - time_);
+
+	time_ = time(NULL);
+
+	for (int i = 0; i < netflow_list.size(); i++) {
+		Netflow *netflow = Netflow::fromBinary(netflow_list[i]);
+		printf("%s\n", netflow->toString().c_str());
+		delete netflow;
+		delete[] netflow_list[i];
+	}
+
+	fprintf(stderr, "Writing Completed in %ld seconds.\n", time(NULL) - time_);
+
+	return 0;
+}
+
